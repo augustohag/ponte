@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ponte — last.fm → spotify</title>
+<style>
+:root{
+  --bg:#0d0f0c;
+  --panel:#151813;
+  --panel2:#1b1f18;
+  --line:#2a2f26;
+  --ink:#eae7dd;
+  --ink-dim:#9a9c8f;
+  --lastfm:#d51007;
+  --spotify:#1db954;
+  --amber:#e8b34c;
+  --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+  --serif:'Iowan Old Style','Georgia',serif;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at 10% -10%, rgba(213,16,7,.10), transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(29,185,84,.10), transparent 40%),
+    var(--bg);
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:14px;
+  line-height:1.5;
+  min-height:100vh;
+}
+.wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
+
+.hero{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:22px 0 26px;border-bottom:1px solid var(--line);margin-bottom:24px;
+  gap:16px;
+}
+.hero .bridge-mark{
+  display:flex;align-items:center;gap:0;flex-shrink:0;
+}
+.dot{width:11px;height:11px;border-radius:50%;}
+.dot.lf{background:var(--lastfm);box-shadow:0 0 12px rgba(213,16,7,.6);}
+.dot.sp{background:var(--spotify);box-shadow:0 0 12px rgba(29,185,84,.6);}
+.arc{width:46px;height:1px;background:linear-gradient(90deg,var(--lastfm),var(--spotify));position:relative;}
+.hero h1{
+  font-family:var(--serif);font-weight:400;font-style:italic;font-size:26px;
+  margin:0;letter-spacing:.2px;
+}
+.hero p{margin:2px 0 0;color:var(--ink-dim);font-size:12px;}
+
+.tabs{display:flex;gap:2px;margin-bottom:22px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;}
+.tab{
+  padding:9px 16px;cursor:pointer;background:var(--panel);color:var(--ink-dim);
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.5px;text-transform:uppercase;
+  border-right:1px solid var(--line);user-select:none;
+}
+.tab:last-child{border-right:none;}
+.tab.active{background:var(--panel2);color:var(--ink);}
+.tab:hover{color:var(--ink);}
+
+.panel{display:none;}
+.panel.active{display:block;}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px;}
+.card h2{font-family:var(--serif);font-style:italic;font-weight:400;font-size:17px;margin:0 0 4px;}
+.card .sub{color:var(--ink-dim);font-size:12px;margin:0 0 16px;}
+
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;}
+.field input, .field select{
+  width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+  padding:9px 10px;border-radius:6px;font-family:var(--mono);font-size:13px;
+}
+.field input:focus, .field select:focus{outline:none;border-color:var(--amber);}
+.row{display:flex;gap:12px;flex-wrap:wrap;}
+.row .field{flex:1;min-width:200px;}
+
+.btn{
+  background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+  padding:9px 16px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12.5px;
+  letter-spacing:.4px;text-transform:uppercase;
+}
+.btn:hover{border-color:var(--amber);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn.primary{background:var(--spotify);border-color:var(--spotify);color:#04150a;font-weight:600;}
+.btn.primary:hover{filter:brightness(1.08);}
+.btn.lf{background:var(--lastfm);border-color:var(--lastfm);color:#fff0ee;}
+.btn.ghost{background:transparent;}
+.btn.small{padding:5px 10px;font-size:11px;}
+.btn.danger{color:#e07a6d;}
+
+.status-line{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-dim);margin-top:10px;}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:20px;font-size:11px;border:1px solid var(--line);}
+.pill.ok{color:var(--spotify);border-color:var(--spotify);}
+.pill.off{color:var(--ink-dim);}
+
+.msg{font-size:12.5px;padding:10px 12px;border-radius:6px;margin-top:12px;border:1px solid var(--line);}
+.msg.err{color:#f0a99e;border-color:#6b2b23;background:rgba(213,16,7,.08);}
+.msg.info{color:var(--amber);border-color:#4a3c1e;background:rgba(232,179,76,.08);}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+th{text-align:left;color:var(--ink-dim);font-weight:400;text-transform:uppercase;font-size:10.5px;letter-spacing:.5px;padding:6px 8px;border-bottom:1px solid var(--line);}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;}
+tr.excluded td{opacity:.35;text-decoration:line-through;}
+.rank{color:var(--amber);font-weight:600;width:28px;}
+.artist{color:var(--ink-dim);font-size:11.5px;}
+.scrobbles{color:var(--spotify);font-variant-numeric:tabular-nums;}
+.track-actions{display:flex;gap:4px;justify-content:flex-end;}
+.tag{font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--ink-dim);}
+.tag.streak{color:#e07a6d;border-color:#6b2b23;}
+
+.source-pick{font-size:11px;color:var(--ink-dim);cursor:pointer;border-bottom:1px dashed var(--line);}
+.source-pick:hover{color:var(--amber);}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;align-items:center;justify-content:center;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:18px;max-width:480px;width:100%;max-height:80vh;overflow:auto;}
+.modal h3{font-family:var(--serif);font-style:italic;font-weight:400;margin:0 0 12px;font-size:15px;}
+.opt{display:flex;gap:10px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:6px;margin-bottom:6px;cursor:pointer;}
+.opt:hover{border-color:var(--amber);}
+.opt.chosen{border-color:var(--spotify);background:rgba(29,185,84,.08);}
+.opt img{width:36px;height:36px;border-radius:3px;flex-shrink:0;}
+.opt .meta{flex:1;min-width:0;}
+.opt .meta .n{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.opt .meta .a{font-size:10.5px;color:var(--ink-dim);}
+
+textarea{
+  width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+  padding:10px;border-radius:6px;font-family:var(--mono);font-size:12.5px;min-height:120px;resize:vertical;
+}
+.hist-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);}
+.hist-item:last-child{border-bottom:none;}
+.hist-item .m{font-family:var(--serif);font-style:italic;}
+.hist-item .n{color:var(--ink-dim);font-size:11.5px;}
+footer{color:var(--ink-dim);font-size:10.5px;text-align:center;margin-top:40px;}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--amber);border-radius:50%;animation:sp .7s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div>
+      <h1>a ponte</h1>
+      <p>last.fm mais tocadas → playlist mensal no spotify</p>
+    </div>
+    <div class="bridge-mark">
+      <div class="dot lf"></div><div class="arc"></div><div class="dot sp"></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="gerar">gerar</div>
+    <div class="tab" data-tab="historico">histórico</div>
+    <div class="tab" data-tab="config">config</div>
+  </div>
+
+  <!-- GERAR -->
+  <div class="panel active" id="panel-gerar">
+    <div class="card">
+      <h2>escolher o mês</h2>
+      <p class="sub">busca as faixas mais ouvidas no last.fm no período (mín. 2 scrobbles)</p>
+      <div class="row">
+        <div class="field">
+          <label>mês</label>
+          <input type="month" id="monthInput">
+        </div>
+        <div class="field">
+          <label>tamanho alvo</label>
+          <select id="sizeInput">
+            <option>25</option><option>30</option><option>35</option><option selected>40</option>
+            <option>45</option><option>50</option><option>55</option><option>60</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 auto;align-self:flex-end;">
+          <button class="btn lf" id="btnFetch">buscar no last.fm</button>
+        </div>
+      </div>
+      <div id="fetchMsg"></div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <h2>faixas selecionadas</h2>
+      <p class="sub" id="resultSub"></p>
+      <table>
+        <thead><tr><th class="rank">#</th><th>faixa</th><th>fonte</th><th class="scrobbles">scr.</th><th></th></tr></thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+      <div class="status-line" id="excludedNote"></div>
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn" id="btnRegenerate">reordenar / regenerar</button>
+        <button class="btn primary" id="btnCreate">criar playlist no spotify</button>
+      </div>
+      <div id="createMsg"></div>
+    </div>
+  </div>
+
+  <!-- HISTORICO -->
+  <div class="panel" id="panel-historico">
+    <div class="card">
+      <h2>meses salvos</h2>
+      <p class="sub">usado para as regras de repetição (máx. 3 meses consecutivos) e desempate</p>
+      <div id="histList"><p class="sub">nenhum mês salvo ainda.</p></div>
+    </div>
+    <div class="card">
+      <h2>importar mês antigo</h2>
+      <p class="sub">cole a lista de faixas de uma playlist antiga (uma por linha, formato "Artista - Faixa") pra alimentar o histórico sem precisar gerar de novo</p>
+      <div class="field">
+        <label>mês</label>
+        <input type="month" id="importMonth">
+      </div>
+      <div class="field">
+        <label>faixas (Artista - Faixa, uma por linha)</label>
+        <textarea id="importText" placeholder="Marina Sena - Numa Ilha
+Liniker - CAJU
+Lady Gaga - Die With A Smile"></textarea>
+      </div>
+      <button class="btn" id="btnImport">salvar no histórico</button>
+      <div id="importMsg"></div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="panel" id="panel-config">
+    <div class="card">
+      <h2>last.fm</h2>
+      <p class="sub">chave de API gratuita em last.fm/api/account/create</p>
+      <div class="row">
+        <div class="field"><label>api key</label><input type="text" id="cfgLastfmKey"></div>
+        <div class="field"><label>usuário</label><input type="text" id="cfgLastfmUser" placeholder="augustohag"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>spotify</h2>
+      <p class="sub">crie um app em developer.spotify.com/dashboard e cadastre o redirect uri abaixo exatamente igual</p>
+      <div class="field"><label>client id</label><input type="text" id="cfgSpotifyId"></div>
+      <div class="field"><label>redirect uri</label><input type="text" id="cfgRedirect"></div>
+      <div class="msg info">este arquivo precisa estar hospedado numa url fixa (github pages, vercel, ou <span style="color:var(--ink)">http://127.0.0.1:PORTA/</span> local) — o spotify não aceita "localhost" puro nem file://. cadastre essa mesma url como redirect uri no dashboard.</div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:12px;">
+        <button class="btn primary" id="btnConnectSpotify">conectar ao spotify</button>
+        <span id="spotifyStatus" class="pill off">desconectado</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>critérios da playlist</h2>
+      <p class="sub">esses valores já refletem as regras combinadas — ajuste se quiser mudar o comportamento padrão</p>
+      <div class="row">
+        <div class="field"><label>máx. faixas por artista</label><input type="number" id="cfgMaxArtist" value="4" min="1" max="10"></div>
+        <div class="field"><label>máx. do mesmo artista no top 10</label><input type="number" id="cfgMaxTop10" value="2" min="1" max="10"></div>
+        <div class="field"><label>meses consecutivos até sair</label><input type="number" id="cfgMaxStreak" value="3" min="1" max="12"></div>
+        <div class="field"><label>mín. scrobbles no mês</label><input type="number" id="cfgMinScrobbles" value="2" min="1" max="20"></div>
+      </div>
+      <div class="field">
+        <label>prioridade de fonte (edição do álbum)</label>
+        <select id="cfgSourcePriority">
+          <option value="deluxe_standard_single" selected>deluxe/especial &gt; standard &gt; single</option>
+          <option value="standard_deluxe_single">standard &gt; deluxe/especial &gt; single</option>
+          <option value="single_standard_deluxe">single &gt; standard &gt; deluxe/especial</option>
+        </select>
+      </div>
+      <button class="btn" id="btnSaveCfg">salvar configurações</button>
+      <div id="cfgMsg"></div>
+    </div>
+  </div>
+
+  <footer>armazenamento 100% local no seu navegador — nada é enviado a nenhum servidor além de last.fm e spotify</footer>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle">escolher versão</h3>
+    <div id="modalBody"></div>
+    <div style="text-align:right;margin-top:10px;"><button class="btn small" id="modalClose">fechar</button></div>
+  </div>
+</div>
+
+<script>
+/* ---------- storage helpers ---------- */
+const LS_CFG='bridge_cfg', LS_HIST='bridge_history', LS_AUTH='bridge_spotify_auth', LS_PKCE='bridge_pkce_verifier';
+
+function loadCfg(){
+  return JSON.parse(localStorage.getItem(LS_CFG)||'{}');
+}
+function saveCfg(c){ localStorage.setItem(LS_CFG, JSON.stringify(c)); }
+function loadHistory(){ return JSON.parse(localStorage.getItem(LS_HIST)||'{}'); }
+function saveHistory(h){ localStorage.setItem(LS_HIST, JSON.stringify(h)); }
+function loadAuth(){ return JSON.parse(localStorage.getItem(LS_AUTH)||'null'); }
+function saveAuth(a){ localStorage.setItem(LS_AUTH, JSON.stringify(a)); }
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+    if(t.dataset.tab==='historico') renderHistoryList();
+  });
+});
+
+/* ---------- month helpers ---------- */
+function monthKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
+function prevMonthKey(key){
+  let [y,m]=key.split('-').map(Number);
+  m--; if(m===0){m=12;y--;}
+  return monthKey(y,m);
+}
+function monthLabel(key){
+  const [y,m]=key.split('-').map(Number);
+  const names=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  return names[m-1]+' '+y;
+}
+function trackKey(artist,name){ return (artist+'|'+name).toLowerCase().trim().replace(/\s+/g,' '); }
+
+/* ---------- config UI ---------- */
+function fillCfgForm(){
+  const c=loadCfg();
+  document.getElementById('cfgLastfmKey').value=c.lastfmKey||'';
+  document.getElementById('cfgLastfmUser').value=c.lastfmUser||'';
+  document.getElementById('cfgSpotifyId').value=c.spotifyId||'';
+  document.getElementById('cfgRedirect').value=c.redirect || (window.location.origin+window.location.pathname);
+  document.getElementById('cfgMaxArtist').value=c.maxArtist||4;
+  document.getElementById('cfgMaxTop10').value=c.maxTop10||2;
+  document.getElementById('cfgMaxStreak').value=c.maxStreak||3;
+  document.getElementById('cfgMinScrobbles').value=c.minScrobbles||2;
+  document.getElementById('cfgSourcePriority').value=c.sourcePriority||'deluxe_standard_single';
+  updateSpotifyStatus();
+}
+document.getElementById('btnSaveCfg').addEventListener('click', ()=>{
+  const c={
+    lastfmKey:document.getElementById('cfgLastfmKey').value.trim(),
+    lastfmUser:document.getElementById('cfgLastfmUser').value.trim(),
+    spotifyId:document.getElementById('cfgSpotifyId').value.trim(),
+    redirect:document.getElementById('cfgRedirect').value.trim(),
+    maxArtist:parseInt(document.getElementById('cfgMaxArtist').value)||4,
+    maxTop10:parseInt(document.getElementById('cfgMaxTop10').value)||2,
+    maxStreak:parseInt(document.getElementById('cfgMaxStreak').value)||3,
+    minScrobbles:parseInt(document.getElementById('cfgMinScrobbles').value)||2,
+    sourcePriority:document.getElementById('cfgSourcePriority').value
+  };
+  saveCfg(c);
+  document.getElementById('cfgMsg').innerHTML='<div class="msg info">salvo.</div>';
+  setTimeout(()=>document.getElementById('cfgMsg').innerHTML='',1800);
+});
+
+/* ---------- Spotify PKCE ---------- */
+function b64url(buf){
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function sha256(str){
+  const data=new TextEncoder().encode(str);
+  return await crypto.subtle.digest('SHA-256', data);
+}
+function randomVerifier(len=64){
+  const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  let out='';
+  const arr=new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  for(let i=0;i<len;i++) out+=chars[arr[i]%chars.length];
+  return out;
+}
+async function spotifyAuthorize(){
+  const c=loadCfg();
+  if(!c.spotifyId || !c.redirect){ alert('preencha client id e redirect uri em config antes de conectar.'); return; }
+  const verifier=randomVerifier();
+  localStorage.setItem(LS_PKCE, verifier);
+  const challenge=b64url(await sha256(verifier));
+  const params=new URLSearchParams({
+    client_id:c.spotifyId,
+    response_type:'code',
+    redirect_uri:c.redirect,
+    code_challenge_method:'S256',
+    code_challenge:challenge,
+    scope:'playlist-modify-public playlist-modify-private'
+  });
+  window.location.href='https://accounts.spotify.com/authorize?'+params.toString();
+}
+document.getElementById('btnConnectSpotify').addEventListener('click', spotifyAuthorize);
+
+async function handleSpotifyRedirect(){
+  const params=new URLSearchParams(window.location.search);
+  const code=params.get('code');
+  if(!code) return;
+  const verifier=localStorage.getItem(LS_PKCE);
+  const c=loadCfg();
+  if(!verifier || !c.spotifyId){ return; }
+  try{
+    const res=await fetch('https://accounts.spotify.com/api/token',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({
+        grant_type:'authorization_code',
+        code, redirect_uri:c.redirect,
+        client_id:c.spotifyId, code_verifier:verifier
+      })
+    });
+    const data=await res.json();
+    if(data.access_token){
+      saveAuth({access_token:data.access_token, refresh_token:data.refresh_token, expires_at:Date.now()+data.expires_in*1000});
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }catch(e){ console.error(e); }
+  updateSpotifyStatus();
+}
+async function ensureSpotifyToken(){
+  let a=loadAuth();
+  if(!a) throw new Error('spotify não conectado. vá em config e conecte.');
+  if(Date.now() > a.expires_at - 30000){
+    const c=loadCfg();
+    const res=await fetch('https://accounts.spotify.com/api/token',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({grant_type:'refresh_token', refresh_token:a.refresh_token, client_id:c.spotifyId})
+    });
+    const data=await res.json();
+    if(!data.access_token) throw new Error('falha ao renovar token do spotify — reconecte em config.');
+    a={access_token:data.access_token, refresh_token:data.refresh_token||a.refresh_token, expires_at:Date.now()+data.expires_in*1000};
+    saveAuth(a);
+  }
+  return a.access_token;
+}
+function updateSpotifyStatus(){
+  const a=loadAuth();
+  const el=document.getElementById('spotifyStatus');
+  if(a){ el.textContent='conectado'; el.className='pill ok'; }
+  else{ el.textContent='desconectado'; el.className='pill off'; }
+}
+async function spotifyApi(path, opts={}){
+  const token=await ensureSpotifyToken();
+  const res=await fetch('https://api.spotify.com/v1'+path, {
+    ...opts,
+    headers:{...(opts.headers||{}), 'Authorization':'Bearer '+token, 'Content-Type':'application/json'}
+  });
+  if(!res.ok){ const t=await res.text(); throw new Error('spotify api: '+res.status+' '+t); }
+  return res.status===204? null : res.json();
+}
+
+/* ---------- Last.fm fetch ---------- */
+async function fetchLastfmMonth(key){
+  const c=loadCfg();
+  if(!c.lastfmKey || !c.lastfmUser) throw new Error('preencha a api key e o usuário do last.fm em config.');
+  const [y,m]=key.split('-').map(Number);
+  const from=Math.floor(Date.UTC(y,m-1,1,0,0,0)/1000);
+  const to=Math.floor(Date.UTC(y,m,1,0,0,0)/1000)-1;
+  const url=`https://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=${encodeURIComponent(c.lastfmUser)}&from=${from}&to=${to}&api_key=${c.lastfmKey}&format=json`;
+  const res=await fetch(url);
+  const data=await res.json();
+  if(data.error) throw new Error('last.fm: '+data.message);
+  let tracks=data.weeklytrackchart && data.weeklytrackchart.track;
+  if(!tracks) return [];
+  if(!Array.isArray(tracks)) tracks=[tracks];
+  return tracks.map(t=>({
+    artist: t.artist && (t.artist['#text']||t.artist.name) || '',
+    name: t.name,
+    playcount: parseInt(t.playcount)||0,
+    key: trackKey(t.artist && (t.artist['#text']||t.artist.name)||'', t.name)
+  })).filter(t=>t.artist && t.name);
+}
+
+/* ---------- selection & ordering logic ---------- */
+function getStreak(monthKey_, tKey, history, maxLookback){
+  let streak=0, cursor=prevMonthKey(monthKey_);
+  for(let i=0;i<maxLookback+2;i++){
+    const m=history[cursor];
+    if(m && m.tracks.some(t=>t.key===tKey)){ streak++; cursor=prevMonthKey(cursor); }
+    else break;
+  }
+  return streak;
+}
+function buildCandidates(rawTracks, monthKey_, cfg, history){
+  const prevKey=prevMonthKey(monthKey_);
+  const prevTracks=(history[prevKey] && history[prevKey].tracks) || [];
+  const prevKeys=new Set(prevTracks.map(t=>t.key));
+  let list=rawTracks.filter(t=>t.playcount>=cfg.minScrobbles);
+  list=list.map(t=>({...t, streak:getStreak(monthKey_, t.key, history, cfg.maxStreak)}));
+  list=list.filter(t=>t.streak < cfg.maxStreak);
+  list.sort((a,b)=>{
+    if(b.playcount!==a.playcount) return b.playcount-a.playcount;
+    const aPrev=prevKeys.has(a.key)?1:0, bPrev=prevKeys.has(b.key)?1:0;
+    return aPrev-bPrev;
+  });
+  return list;
+}
+function selectForSize(candidates, targetSize, cfg){
+  const counts={};
+  const selected=[];
+  for(const t of candidates){
+    if(selected.length>=targetSize) break;
+    const c=counts[t.artist]||0;
+    if(c>=cfg.maxArtist) continue;
+    selected.push(t);
+    counts[t.artist]=c+1;
+  }
+  return selected;
+}
+function orderForDiversity(list, cfg){
+  let remaining=[...list];
+  const result=[];
+  let runArtist=null, runLength=0;
+  const top10Count={};
+  while(remaining.length){
+    let placedIdx=-1;
+    for(let i=0;i<remaining.length;i++){
+      const t=remaining[i];
+      const pos=result.length;
+      const wouldRun=(t.artist===runArtist)?runLength+1:1;
+      const projTop10=(pos<10)? (top10Count[t.artist]||0)+1 : (top10Count[t.artist]||0);
+      const violatesRun=wouldRun>=4;
+      const violatesTop10=pos<10 && projTop10>cfg.maxTop10;
+      if(!violatesRun && !violatesTop10){ placedIdx=i; break; }
+    }
+    if(placedIdx===-1){
+      placedIdx=remaining.findIndex(t=>(t.artist===runArtist?runLength+1:1) < 4);
+      if(placedIdx===-1) placedIdx=0;
+    }
+    const t=remaining[placedIdx];
+    const pos=result.length;
+    const wouldRun=(t.artist===runArtist)?runLength+1:1;
+    result.push(t);
+    remaining.splice(placedIdx,1);
+    runLength=wouldRun; runArtist=t.artist;
+    if(pos<10) top10Count[t.artist]=(top10Count[t.artist]||0)+1;
+  }
+  return result;
+}
+
+/* ---------- generate flow ---------- */
+let currentPlaylist=[]; // {artist,name,key,playcount,streak,chosenTrack:null}
+let currentMonthKey=null;
+
+document.getElementById('btnFetch').addEventListener('click', runGenerate);
+document.getElementById('btnRegenerate').addEventListener('click', runGenerate);
+
+async function runGenerate(){
+  const monthVal=document.getElementById('monthInput').value;
+  const msgEl=document.getElementById('fetchMsg');
+  msgEl.innerHTML='';
+  if(!monthVal){ msgEl.innerHTML='<div class="msg err">escolha um mês.</div>'; return; }
+  currentMonthKey=monthVal;
+  const targetSize=parseInt(document.getElementById('sizeInput').value);
+  const cfg={...{maxArtist:4,maxTop10:2,maxStreak:3,minScrobbles:2}, ...loadCfg()};
+  msgEl.innerHTML='<div class="status-line"><span class="spin"></span> buscando no last.fm…</div>';
+  try{
+    const raw=await fetchLastfmMonth(currentMonthKey);
+    if(raw.length===0){ msgEl.innerHTML='<div class="msg err">nenhuma faixa encontrada nesse mês. confira api key / usuário / se houve scrobbles.</div>'; return; }
+    const history=loadHistory();
+    const candidates=buildCandidates(raw, currentMonthKey, cfg, history);
+    let selected=selectForSize(candidates, targetSize, cfg);
+    if(selected.length < targetSize){
+      const possibleSizes=[25,30,35,40,45,50,55,60].filter(s=>s<=selected.length);
+      const fallback=possibleSizes.length? Math.max(...possibleSizes) : null;
+      msgEl.innerHTML=`<div class="msg info">só foi possível reunir ${selected.length} faixas respeitando os critérios${fallback? ' — considere usar tamanho '+fallback : ' (nenhum múltiplo de 5 alcançado — ajuste os filtros)'}.</div>`;
+    } else {
+      msgEl.innerHTML='';
+    }
+    selected=orderForDiversity(selected, cfg);
+    currentPlaylist=selected.map(t=>({...t, chosenTrack:null}));
+    renderResult(candidates.length, raw.length);
+  }catch(e){
+    msgEl.innerHTML='<div class="msg err">'+e.message+'</div>';
+  }
+}
+
+function renderResult(nCandidates, nRaw){
+  document.getElementById('resultCard').style.display='block';
+  document.getElementById('resultSub').textContent =
+    `${monthLabel(currentMonthKey)} · ${currentPlaylist.length} faixas escolhidas de ${nCandidates} elegíveis (${nRaw} no total do mês)`;
+  const body=document.getElementById('resultBody');
+  body.innerHTML='';
+  currentPlaylist.forEach((t,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="rank">${i+1}</td>
+      <td>${escapeHtml(t.name)}<div class="artist">${escapeHtml(t.artist)}</div></td>
+      <td><span class="source-pick" data-idx="${i}">${t.chosenTrack? escapeHtml(t.chosenTrack.albumName+' · '+t.chosenTrack.badge) : 'auto (clique p/ escolher)'}</span></td>
+      <td class="scrobbles">${t.playcount}</td>
+      <td><div class="track-actions">
+        <button class="btn small ghost" data-up="${i}">↑</button>
+        <button class="btn small ghost" data-down="${i}">↓</button>
+        <button class="btn small danger" data-rm="${i}">✕</button>
+      </div></td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('[data-up]').forEach(b=>b.addEventListener('click',()=>{
+    const i=parseInt(b.dataset.up); if(i>0){ [currentPlaylist[i-1],currentPlaylist[i]]=[currentPlaylist[i],currentPlaylist[i-1]]; renderResult(nCandidates,nRaw);} }));
+  body.querySelectorAll('[data-down]').forEach(b=>b.addEventListener('click',()=>{
+    const i=parseInt(b.dataset.down); if(i<currentPlaylist.length-1){ [currentPlaylist[i+1],currentPlaylist[i]]=[currentPlaylist[i],currentPlaylist[i+1]]; renderResult(nCandidates,nRaw);} }));
+  body.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click',()=>{
+    const i=parseInt(b.dataset.rm); currentPlaylist.splice(i,1); renderResult(nCandidates,nRaw); }));
+  body.querySelectorAll('.source-pick').forEach(b=>b.addEventListener('click',()=>openSourceModal(parseInt(b.dataset.idx))));
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------- Spotify search & source picking ---------- */
+function classifyAlbum(albumType, albumName){
+  const n=(albumName||'').toLowerCase();
+  if(albumType==='single') return {group:'single', badge:'single'};
+  if(/deluxe|special edition|complete edition|anniversary|extended|expanded|super deluxe/.test(n)) return {group:'deluxe', badge:'deluxe'};
+  return {group:'standard', badge:'standard'};
+}
+function priorityOrder(cfgVal){
+  if(cfgVal==='standard_deluxe_single') return ['standard','deluxe','single'];
+  if(cfgVal==='single_standard_deluxe') return ['single','standard','deluxe'];
+  return ['deluxe','standard','single'];
+}
+async function trySearch(q, limit){
+  const params=new URLSearchParams({q, type:'track', limit:String(limit)});
+  return spotifyApi(`/search?${params.toString()}`);
+}
+async function searchSpotifyCandidates(artist, name){
+  let data;
+  try{
+    data=await trySearch(`track:${name} artist:${artist}`, 20);
+  }catch(e1){
+    try{
+      // fallback: consulta simples sem filtros de campo, caso a consulta com field-filter seja rejeitada
+      data=await trySearch(`${name} ${artist}`, 20);
+    }catch(e2){
+      throw new Error('busca no spotify falhou (possível restrição de acesso à API de catálogo para apps novos — verifique o status do app em developer.spotify.com/dashboard). detalhe: '+e2.message);
+    }
+  }
+  const items=(data.tracks && data.tracks.items) || [];
+  return items.map(it=>{
+    const cls=classifyAlbum(it.album.album_type, it.album.name);
+    return {
+      uri:it.uri, id:it.id, name:it.name,
+      albumName:it.album.name, releaseDate:it.album.release_date,
+      image:(it.album.images && it.album.images[2]) ? it.album.images[2].url : (it.album.images[0]||{}).url,
+      group:cls.group, badge:cls.badge
+    };
+  });
+}
+function pickBest(cands, cfg){
+  const order=priorityOrder(cfg.sourcePriority);
+  for(const g of order){
+    const inGroup=cands.filter(c=>c.group===g);
+    if(inGroup.length){
+      inGroup.sort((a,b)=>(a.releaseDate||'9999').localeCompare(b.releaseDate||'9999'));
+      return inGroup[0];
+    }
+  }
+  return cands[0]||null;
+}
+async function openSourceModal(idx){
+  const cfg=loadCfg();
+  const t=currentPlaylist[idx];
+  const bg=document.getElementById('modalBg');
+  document.getElementById('modalTitle').textContent=t.name+' — '+t.artist;
+  document.getElementById('modalBody').innerHTML='<div class="status-line"><span class="spin"></span> buscando no spotify…</div>';
+  bg.classList.add('show');
+  try{
+    const cands=await searchSpotifyCandidates(t.artist, t.name);
+    if(!t.chosenTrack) t.chosenTrack = pickBest(cands, cfg);
+    const body=document.getElementById('modalBody');
+    if(!cands.length){ body.innerHTML='<div class="msg err">nada encontrado no spotify.</div>'; return; }
+    body.innerHTML='';
+    cands.forEach(c=>{
+      const div=document.createElement('div');
+      div.className='opt'+(t.chosenTrack && t.chosenTrack.uri===c.uri?' chosen':'');
+      div.innerHTML=`<img src="${c.image||''}"><div class="meta"><div class="n">${escapeHtml(c.albumName)}</div><div class="a">${c.badge} · ${c.releaseDate||''}</div></div>`;
+      div.addEventListener('click',()=>{
+        t.chosenTrack=c;
+        bg.classList.remove('show');
+        renderResult(currentPlaylist.length, currentPlaylist.length);
+      });
+      body.appendChild(div);
+    });
+  }catch(e){
+    document.getElementById('modalBody').innerHTML='<div class="msg err">'+e.message+'</div>';
+  }
+}
+document.getElementById('modalClose').addEventListener('click',()=>document.getElementById('modalBg').classList.remove('show'));
+
+/* ---------- create playlist ---------- */
+document.getElementById('btnCreate').addEventListener('click', async ()=>{
+  const msgEl=document.getElementById('createMsg');
+  if(!currentPlaylist.length){ return; }
+  msgEl.innerHTML='<div class="status-line"><span class="spin"></span> resolvendo faixas no spotify…</div>';
+  try{
+    const cfg=loadCfg();
+    for(const t of currentPlaylist){
+      if(!t.chosenTrack){
+        const cands=await searchSpotifyCandidates(t.artist, t.name);
+        t.chosenTrack=pickBest(cands, cfg);
+      }
+    }
+    const missing=currentPlaylist.filter(t=>!t.chosenTrack);
+    if(missing.length){
+      msgEl.innerHTML='<div class="msg err">não encontrei no spotify: '+missing.map(m=>escapeHtml(m.artist+' — '+m.name)).join(', ')+'. remova ou escolha manualmente antes de criar.</div>';
+      return;
+    }
+    msgEl.innerHTML='<div class="status-line"><span class="spin"></span> criando playlist…</div>';
+    const me=await spotifyApi('/me');
+    const playlistName=monthLabel(currentMonthKey);
+    const playlist=await spotifyApi(`/users/${me.id}/playlists`,{
+      method:'POST',
+      body:JSON.stringify({name:playlistName, description:'gerado automaticamente a partir do last.fm', public:true})
+    });
+    const uris=currentPlaylist.map(t=>t.chosenTrack.uri);
+    for(let i=0;i<uris.length;i+=100){
+      await spotifyApi(`/playlists/${playlist.id}/tracks`,{method:'POST', body:JSON.stringify({uris:uris.slice(i,i+100)})});
+    }
+    const history=loadHistory();
+    history[currentMonthKey]={
+      playlistId:playlist.id,
+      tracks:currentPlaylist.map(t=>({artist:t.artist,name:t.name,key:t.key,playcount:t.playcount}))
+    };
+    saveHistory(history);
+    msgEl.innerHTML=`<div class="msg info">playlist "${escapeHtml(playlistName)}" criada com ${uris.length} faixas e salva no histórico. <a href="${playlist.external_urls.spotify}" target="_blank" style="color:var(--spotify)">abrir no spotify →</a></div>`;
+  }catch(e){
+    msgEl.innerHTML='<div class="msg err">'+e.message+'</div>';
+  }
+});
+
+/* ---------- history tab ---------- */
+function renderHistoryList(){
+  const history=loadHistory();
+  const keys=Object.keys(history).sort().reverse();
+  const el=document.getElementById('histList');
+  if(!keys.length){ el.innerHTML='<p class="sub">nenhum mês salvo ainda.</p>'; return; }
+  el.innerHTML='';
+  keys.forEach(k=>{
+    const h=history[k];
+    const div=document.createElement('div');
+    div.className='hist-item';
+    div.innerHTML=`<div><div class="m">${monthLabel(k)}</div><div class="n">${h.tracks.length} faixas${h.playlistId? ' · com playlist no spotify':''}</div></div>
+      <button class="btn small danger" data-del="${k}">remover</button>`;
+    el.appendChild(div);
+  });
+  el.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{
+    if(!confirm('remover '+monthLabel(b.dataset.del)+' do histórico?')) return;
+    const h=loadHistory(); delete h[b.dataset.del]; saveHistory(h); renderHistoryList();
+  }));
+}
+document.getElementById('btnImport').addEventListener('click', ()=>{
+  const key=document.getElementById('importMonth').value;
+  const msgEl=document.getElementById('importMsg');
+  if(!key){ msgEl.innerHTML='<div class="msg err">escolha o mês.</div>'; return; }
+  const lines=document.getElementById('importText').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  const tracks=[];
+  for(const line of lines){
+    const idx=line.indexOf(' - ');
+    if(idx===-1) continue;
+    const artist=line.slice(0,idx).trim();
+    const name=line.slice(idx+3).trim();
+    tracks.push({artist, name, key:trackKey(artist,name), playcount:null});
+  }
+  if(!tracks.length){ msgEl.innerHTML='<div class="msg err">nenhuma linha no formato "Artista - Faixa" encontrada.</div>'; return; }
+  const history=loadHistory();
+  history[key]={tracks, imported:true};
+  saveHistory(history);
+  msgEl.innerHTML=`<div class="msg info">${tracks.length} faixas salvas em ${monthLabel(key)}.</div>`;
+  document.getElementById('importText').value='';
+  renderHistoryList();
+});
+
+/* ---------- init ---------- */
+(async function init(){
+  fillCfgForm();
+  await handleSpotifyRedirect();
+  fillCfgForm();
+  const now=new Date();
+  document.getElementById('monthInput').value = monthKey(now.getFullYear(), now.getMonth()+1);
+})();
+</script>
+</body>
+</html>
