@@ -616,11 +616,11 @@ async function trySearch(q, limit){
 async function searchSpotifyCandidates(artist, name){
   let data;
   try{
-    data=await trySearch(`track:${name} artist:${artist}`, 20);
+    data=await trySearch(`track:${name} artist:${artist}`, 10);
   }catch(e1){
     try{
       // fallback: consulta simples sem filtros de campo, caso a consulta com field-filter seja rejeitada
-      data=await trySearch(`${name} ${artist}`, 20);
+      data=await trySearch(`${name} ${artist}`, 10);
     }catch(e2){
       throw new Error('busca no spotify falhou (possível restrição de acesso à API de catálogo para apps novos — verifique o status do app em developer.spotify.com/dashboard). detalhe: '+e2.message);
     }
@@ -696,15 +696,14 @@ document.getElementById('btnCreate').addEventListener('click', async ()=>{
       return;
     }
     msgEl.innerHTML='<div class="status-line"><span class="spin"></span> criando playlist…</div>';
-    const me=await spotifyApi('/me');
     const playlistName=monthLabel(currentMonthKey);
-    const playlist=await spotifyApi(`/users/${me.id}/playlists`,{
+    const playlist=await spotifyApi('/me/playlists',{
       method:'POST',
       body:JSON.stringify({name:playlistName, description:'gerado automaticamente a partir do last.fm', public:true})
     });
     const uris=currentPlaylist.map(t=>t.chosenTrack.uri);
     for(let i=0;i<uris.length;i+=100){
-      await spotifyApi(`/playlists/${playlist.id}/tracks`,{method:'POST', body:JSON.stringify({uris:uris.slice(i,i+100)})});
+      await spotifyApi(`/playlists/${playlist.id}/items`,{method:'POST', body:JSON.stringify({uris:uris.slice(i,i+100)})});
     }
     const history=loadHistory();
     history[currentMonthKey]={
