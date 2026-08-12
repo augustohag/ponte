@@ -622,30 +622,47 @@ async function trySearch(q, limit){
   const params=new URLSearchParams({q, type:'track', limit:String(limit)});
   return spotifyApi(`/search?${params.toString()}`);
 }
+function stripFeat(name){
+  return name.replace(/\s*[\(\[]\s*(feat\.?|featuring|ft\.?|with)\s+[^\)\]]+[\)\]]\s*/gi, '')
+             .replace(/\s*[-–]\s*(feat\.?|featuring|ft\.?|with)\s+.+$/i, '')
+             .trim();
+}
 async function searchSpotifyCandidates(artist, name){
-  let data;
-  try{
-    data=await trySearch(`track:${name} artist:${artist}`, 10);
-  }catch(e1){
-    try{
-      // fallback: consulta simples sem filtros de campo, caso a consulta com field-filter seja rejeitada
-      data=await trySearch(`${name} ${artist}`, 10);
-    }catch(e2){
-      throw new Error('busca no spotify falhou (possível restrição de acesso à API de catálogo para apps novos — verifique o status do app em developer.spotify.com/dashboard). detalhe: '+e2.message);
-    }
+  const cleanName=stripFeat(name);
+  const attempts=[
+    ()=>trySearch(`track:${name} artist:${artist}`, 10),
+    ()=>trySearch(`track:${cleanName} artist:${artist}`, 10),
+    ()=>trySearch(`${cleanName} ${artist}`, 10),
+    ()=>trySearch(`${name} ${artist}`, 10)
+  ];
+  function mapItems(data){
+    const items=(data && data.tracks && data.tracks.items) || [];
+    // mantém a ordem de relevância retornada pelo spotify (não reordena por data) —
+    // quando há versão explicit e clean do mesmo álbum, a explicit costuma vir primeiro nessa ordem
+    return items.map(it=>{
+      const cls=classifyAlbum(it.album.album_type, it.album.name);
+      return {
+        uri:it.uri, id:it.id, name:it.name,
+        albumName:it.album.name, releaseDate:it.album.release_date,
+        image:(it.album.images && it.album.images[2]) ? it.album.images[2].url : (it.album.images[0]||{}).url,
+        group:cls.group, badge:cls.badge
+      };
+    }).filter(c=>c.group!=='compilation');
   }
-  const items=(data.tracks && data.tracks.items) || [];
-  // mantém a ordem de relevância retornada pelo spotify (não reordena por data) —
-  // quando há versão explicit e clean do mesmo álbum, a explicit costuma vir primeiro nessa ordem
-  return items.map(it=>{
-    const cls=classifyAlbum(it.album.album_type, it.album.name);
-    return {
-      uri:it.uri, id:it.id, name:it.name,
-      albumName:it.album.name, releaseDate:it.album.release_date,
-      image:(it.album.images && it.album.images[2]) ? it.album.images[2].url : (it.album.images[0]||{}).url,
-      group:cls.group, badge:cls.badge
-    };
-  }).filter(c=>c.group!=='compilation');
+  let lastErr=null, best=[];
+  for(const attempt of attempts){
+    try{
+      const data=await attempt();
+      const mapped=mapItems(data);
+      if(mapped.length){ return mapped; }
+      if(mapped.length===0 && best.length===0 && data && data.tracks && data.tracks.items && data.tracks.items.length){
+        best=mapItems(data); // guarda resultado mesmo que só tenha compilações, como último recurso
+      }
+    }catch(e){ lastErr=e; }
+  }
+  if(best.length) return best;
+  if(lastErr) throw new Error('busca no spotify falhou (possível restrição de acesso à API de catálogo para apps novos — verifique o status do app em developer.spotify.com/dashboard). detalhe: '+lastErr.message);
+  return [];
 }
 function pickBest(cands, cfg){
   const order=priorityOrder(cfg.sourcePriority);
