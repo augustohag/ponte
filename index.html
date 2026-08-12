@@ -282,7 +282,7 @@ Lady Gaga - Die With A Smile"></textarea>
 
 <script>
 /* ---------- storage helpers ---------- */
-const LS_CFG='bridge_cfg', LS_HIST='bridge_history', LS_AUTH='bridge_spotify_auth', LS_PKCE='bridge_pkce_verifier';
+const LS_CFG='bridge_cfg', LS_HIST='bridge_history', LS_AUTH='bridge_spotify_auth', LS_PKCE='bridge_pkce_verifier', LS_SRC='bridge_source_prefs';
 
 function loadCfg(){
   return JSON.parse(localStorage.getItem(LS_CFG)||'{}');
@@ -292,6 +292,12 @@ function loadHistory(){ return JSON.parse(localStorage.getItem(LS_HIST)||'{}'); 
 function saveHistory(h){ localStorage.setItem(LS_HIST, JSON.stringify(h)); }
 function loadAuth(){ return JSON.parse(localStorage.getItem(LS_AUTH)||'null'); }
 function saveAuth(a){ localStorage.setItem(LS_AUTH, JSON.stringify(a)); }
+function loadSourcePrefs(){ return JSON.parse(localStorage.getItem(LS_SRC)||'{}'); }
+function saveSourcePref(trackKey_, chosenTrack){
+  const prefs=loadSourcePrefs();
+  prefs[trackKey_]=chosenTrack;
+  localStorage.setItem(LS_SRC, JSON.stringify(prefs));
+}
 
 /* ---------- tabs ---------- */
 document.querySelectorAll('.tab').forEach(t=>{
@@ -560,7 +566,8 @@ async function runGenerate(){
       msgEl.innerHTML='';
     }
     selected=orderForDiversity(selected, cfg);
-    currentPlaylist=selected.map(t=>({...t, chosenTrack:null}));
+    const sourcePrefs=loadSourcePrefs();
+    currentPlaylist=selected.map(t=>({...t, chosenTrack: sourcePrefs[t.key] || null}));
     renderResult(candidates.length, raw.length);
   }catch(e){
     msgEl.innerHTML='<div class="msg err">'+e.message+'</div>';
@@ -598,8 +605,10 @@ function renderResult(nCandidates, nRaw){
 function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 /* ---------- Spotify search & source picking ---------- */
+const COMPILATION_PATTERN=/karaoke|radio mix|top \d+|hits of all time|greatest hits|melhores (de|do|da)|temazos|playlist|pop perfection|pilates|mix 20\d\d|as melhores|coletânea|coletanea|various artists|party mix|workout mix|running mix|gym mix|summer hits|verão \d{4}|verao \d{4}/i;
 function classifyAlbum(albumType, albumName){
   const n=(albumName||'').toLowerCase();
+  if(albumType==='compilation' || COMPILATION_PATTERN.test(n)) return {group:'compilation', badge:'coletânea'};
   if(albumType==='single') return {group:'single', badge:'single'};
   if(/deluxe|special edition|complete edition|anniversary|extended|expanded|super deluxe/.test(n)) return {group:'deluxe', badge:'deluxe'};
   return {group:'standard', badge:'standard'};
@@ -626,6 +635,8 @@ async function searchSpotifyCandidates(artist, name){
     }
   }
   const items=(data.tracks && data.tracks.items) || [];
+  // mantém a ordem de relevância retornada pelo spotify (não reordena por data) —
+  // quando há versão explicit e clean do mesmo álbum, a explicit costuma vir primeiro nessa ordem
   return items.map(it=>{
     const cls=classifyAlbum(it.album.album_type, it.album.name);
     return {
@@ -634,16 +645,13 @@ async function searchSpotifyCandidates(artist, name){
       image:(it.album.images && it.album.images[2]) ? it.album.images[2].url : (it.album.images[0]||{}).url,
       group:cls.group, badge:cls.badge
     };
-  });
+  }).filter(c=>c.group!=='compilation');
 }
 function pickBest(cands, cfg){
   const order=priorityOrder(cfg.sourcePriority);
   for(const g of order){
     const inGroup=cands.filter(c=>c.group===g);
-    if(inGroup.length){
-      inGroup.sort((a,b)=>(a.releaseDate||'9999').localeCompare(b.releaseDate||'9999'));
-      return inGroup[0];
-    }
+    if(inGroup.length) return inGroup[0]; // primeira na ordem de relevância do spotify
   }
   return cands[0]||null;
 }
@@ -656,7 +664,7 @@ async function openSourceModal(idx){
   bg.classList.add('show');
   try{
     const cands=await searchSpotifyCandidates(t.artist, t.name);
-    if(!t.chosenTrack) t.chosenTrack = pickBest(cands, cfg);
+    if(!t.chosenTrack){ t.chosenTrack = pickBest(cands, cfg); if(t.chosenTrack) saveSourcePref(t.key, t.chosenTrack); }
     const body=document.getElementById('modalBody');
     if(!cands.length){ body.innerHTML='<div class="msg err">nada encontrado no spotify.</div>'; return; }
     body.innerHTML='';
@@ -666,6 +674,7 @@ async function openSourceModal(idx){
       div.innerHTML=`<img src="${c.image||''}"><div class="meta"><div class="n">${escapeHtml(c.albumName)}</div><div class="a">${c.badge} · ${c.releaseDate||''}</div></div>`;
       div.addEventListener('click',()=>{
         t.chosenTrack=c;
+        saveSourcePref(t.key, c);
         bg.classList.remove('show');
         renderResult(currentPlaylist.length, currentPlaylist.length);
       });
@@ -688,6 +697,7 @@ document.getElementById('btnCreate').addEventListener('click', async ()=>{
       if(!t.chosenTrack){
         const cands=await searchSpotifyCandidates(t.artist, t.name);
         t.chosenTrack=pickBest(cands, cfg);
+        if(t.chosenTrack) saveSourcePref(t.key, t.chosenTrack);
       }
     }
     const missing=currentPlaylist.filter(t=>!t.chosenTrack);
